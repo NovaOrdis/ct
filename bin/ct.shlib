@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+
+function display-usage() {
+
+cat <<EOF
+
+Container Tool (ct).
+
+A bash-based tool that implements often-used patterns for interacting with local continers.
+Think about it as shortcuts or aliases.
+
+Usage:
+
+    ct <command> [command-args]
+
+Commands:
+
+    attach - exec a bash into the newest container.
+
+EOF
+}
+
+function main() {
+
+    local command
+
+    while [ -n "$1" ]; do
+
+        if [ "--help" == "$1" ]; then
+
+            display-usage;
+            exit 0;
+
+        elif [ "-v" == "$1" ]; then
+
+            export VERBOSE=true;
+
+        elif [[ -z ${command} ]]; then
+
+            command=$1
+        fi
+
+        shift
+    done
+
+    [[ -z ${command} ]] && { display-usage; exit 1; }
+
+    ${command}
+}
+
+function debug() {
+
+  ${VERBOSE} && echo "$@" 1>&2;
+
+}
+
+function error() {
+
+    echo "[error]: $@" 1>&2;
+}
+
+function attach() {
+
+    local tcid
+
+    for cid in $(docker ps -q); do
+
+        [[ -n ${tcid} ]] && { error "more than one containers are running"; return 1; }
+
+        tcid=${cid}
+    done
+
+    echo "attaching to the newest container (${tcid}) ..."
+
+    docker exec -it ${tcid} bash
+}

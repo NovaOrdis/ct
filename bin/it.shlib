@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+
+function display-usage() {
+
+cat <<EOF
+
+Image Tool (it).
+
+A bash-based tool that implements patterns for building and working with Docker images.
+It assumes that the image is built around Java functionality whose Maven-based building
+is part of the process.
+
+Usage:
+
+    it [build]|clean|zip
+
+
+build flags:
+
+    --no-push - do not push the image
+
+    --no-java - do not attempt to build the Java code, use whatever is available in
+                the Java sub-directory.
+
+Configuration:
+
+it expects a .it/it.conf configuration file with a similar content:
+
+  IMAGE_REGISTRY=docker.io
+  IMAGE_NAMESPACE=novaordis
+  IMAGE_REPOSITORY=dsmanager
+  IMAGE_TAG=latest
+  EXTERNAL_ARTIFACTS="slf4j-api-1.7.12.jar slf4j-log4j12-1.7.12.jar log4j-1.2.17.jar"
+  ENTITLEMENTS_DIR=
+  JAVA_PROJECT_DIR=dsmanager
+  # If \$M2 is defined, it will take precedence. Otherwise \$LOCAL_MAVEN_REPOSITORY
+  # will be used. If neither is defined, the program will error out.
+  # LOCAL_MAVEN_REPOSITORY=/Users/ovidiu/.m2/repository
+
+EOF
+
+}
+
+function main() {
+
+    local command=build
+    local build_java=true
+    local build_image=true
+    local push_image=true
+
+    while [ -n "$1" ]; do
+
+        if [ "--help" == "$1" ]; then
+
+            display-usage;
+            exit 0;
+
+        elif [ "-v" == "$1" ]; then
+
+            export VERBOSE=true;
+
+        elif [ "--no-push" == "$1" ]; then
+            push_image=false
+        elif [ "--no-java" == "$1" ]; then
+            build_java=false
+        elif [ "clean" == "$1" ]; then
+            command="clean"
+        elif [ "zip" == "$1" ]; then
+            command="zip"
+        fi
+
+        shift
+    done
+
+    read-configuration;
+
+    if [ "${command}" = "build" ]; then
+
+        if ${build_java}; then
+
+            build-java || { echo "failed to build java code" 1>&2; exit 1; }
+        fi
+
+        if ${build_image}; then
+
+            build-image || { echo "failed to build image" 1>&2; exit 1; }
+        fi
+
+        if ${push_image}; then
+
+            push-image || { echo "failed to push image" 1>&2; exit 1; }
+        fi
+
+        echo "all ok"
+
+    elif [ "${command}" = "clean" ]; then
+        clean;
+    elif [ "${command}" = "zip" ]; then
+        archive;
+    else
+        error "unknown command ${command}"
+        exit 1
+    fi
+}
+
+function debug() {
+
+  ${VERBOSE} && echo "$@" 1>&2;
+
+}
+
+function error() {
+
+    echo "[error]: $@" 1>&2;
+}
+
+function read-configuration() {
+
+    local config_file=.it/it.conf
+
+    [ -f ${config_file} ] || { error "no it configuration file ${config_file} found"; exit 1; }
+
+    source ${config_file}
+
+    #
+    # make sure the mandatory configuration is present
+    #
+
+    [ -z "${IMAGE_REGISTRY}" ] && { error "no IMAGE_REGISTRY found in configuration"; exit 1; }
+    [ -z "${IMAGE_NAMESPACE}" ] && { error "no IMAGE_NAMESPACE found in configuration"; exit 1; }
+    [ -z "${IMAGE_REPOSITORY}" ] && { error "no IMAGE_REPOSITORY found in configuration"; exit 1; }
+    [ -z "${IMAGE_TAG}" ] && { error "no IMAGE_TAG found in configuration"; exit 1; }
+
+}
+
+function build-java() {
+
+    echo "building java ..."
+
+    # if no JAVA_PROJECT_DIR, return
+    [ ! -d "${JAVA_PROJECT_DIR}" ] && return 0
+
+    (cd ${JAVA_PROJECT_DIR}; mvn clean package)
+}
+
+function build-image() {
+
+    echo "building image ..."
+
+    [ -f ./Dockerfile ] || { echo "no ./Dockerfile"; return 1; }
+
+    fetch-external-artifacts || return 1;
+    fetch-entitlements || return 1;
+
+    if ! docker build -t ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_REPOSITORY}:${IMAGE_TAG} .; then
+        echo "docker build failed" 1>&2;
+        return 1;
+    fi
+}
+
+function push-image() {
+
+    if ! docker push ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_REPOSITORY}:${IMAGE_TAG}; then
+        echo "docker push failed" 1>&2;
+        return 1;
+    fi
+}
+
+function fetch-external-artifacts() {
+
+    [ -z "${EXTERNAL_ARTIFACTS}" ] && return 0;
+
+    local local_maven_repository=${M2:-${LOCAL_MAVEN_REPOSITORY}}
+
+    [[ -z ${local_maven_repository} ]] && { echo "M2 and LOCAL_MAVEN_REPOSITORY not defined" 1>&2; return 1; }
+
+    echo "fetching external artifacts ..."
+
+    debug "local_maven_repository: ${local_maven_repository}"
+    debug "EXTERNAL_ARTIFACTS: ${EXTERNAL_ARTIFACTS}"
+
+    for i in ${EXTERNAL_ARTIFACTS}; do
+        if [ ! -f $(dirname $0)/artifacts/${i} ]; then
+            src=$(find ${local_maven_repository} -name ${i})
+            [ -z "${src}" ] && { echo "${i} not found in ${local_maven_repository}" 1>&2; return 1; }
+            cp ${src} $(dirname $0)/artifacts && \
+                echo "copied ${i} to $(dirname $0)/artifacts" || \
+                { echo "failed to copy ${src}" 1>&2; return 1; }
+        fi
+    done
+}
+
+function fetch-entitlements() {
+
+    echo "fetching entitlements ..."
+
+    [ ! -d ./entitlements ] && mkdir ./entitlements
+
+    cp /Users/ovidiu/runtime/etc/redhat-entitlements/* ./entitlements
+}
+
+function clean() {
+
+    if [ -d ./entitlements ]; then
+
+        rm -rf ./entitlements/*
+    fi
+
+    if [ -n "${JAVA_PROJECT_DIR}" ]; then
+
+        (cd ${JAVA_PROJECT_DIR}; mvn clean)
+
+    fi
+}
+
+function archive() {
+
+    clean;
+
+    local name=$(basename $(pwd))
+
+    (cd ..; zip -r ${name}.zip ${name} -x '*.iml')
+}

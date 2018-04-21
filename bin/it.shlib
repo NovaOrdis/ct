@@ -12,17 +12,22 @@ is part of the process.
 
 Usage:
 
-    it [build]|clean|zip
+    it [build]|clean|dangling|zip
 
+Commands:
 
-build flags:
+    build - build an image.
 
-    --no-push - do not push the image
+        --no-push - do not push the image
 
-    --no-cache - do not use the build cache when building the image.
+        --no-cache - do not use the build cache when building the image.
 
-    --no-java - do not attempt to build the Java code, use whatever is available in
-                the Java sub-directory.
+        --no-java - do not attempt to build the Java code, use whatever is available in
+                    the Java sub-directory.
+
+    clean - clean the work area, removing entitlements and cleaning the temporary build artifacts.
+
+    dangling - remove the dangling images from the local repository.
 
 Configuration:
 
@@ -78,6 +83,10 @@ function main() {
 
             command="clean"
 
+        elif [ "dangling" == "$1" ]; then
+
+            command="dangling"
+
         elif [ "zip" == "$1" ]; then
 
             command="zip"
@@ -114,6 +123,10 @@ function main() {
     elif [ "${command}" = "zip" ]; then
 
         archive;
+
+    elif [ "${command}" = "dangling" ]; then
+
+        clean-dangling-images;
 
     else
 
@@ -251,4 +264,10 @@ function archive() {
     local name=$(basename $(pwd))
 
     (cd ..; zip -r ${name}.zip ${name} -x '*.iml')
+}
+
+function clean-dangling-images() {
+
+    docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+
 }

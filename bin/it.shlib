@@ -44,6 +44,18 @@ it expects a .it/it.conf configuration file with a similar content:
   # will be used. If neither is defined, the program will error out.
   # LOCAL_MAVEN_REPOSITORY=/Users/ovidiu/.m2/repository
 
+where:
+
+  IMAGE_REGISTRY - the registry to push new newly created images to.
+
+  IMAGE_NAMESPACE - the namespace in the target registry to push the newly created images to.
+    The value is optional, if not provided, no namespace will be used.
+
+  IMAGE_REPOSITORY - the repository in the target registry.
+
+  IMAGE_TAG - the tag in the target registry.
+
+
 EOF
 
 }
@@ -159,10 +171,18 @@ function read-configuration() {
     #
 
     [ -z "${IMAGE_REGISTRY}" ] && { error "no IMAGE_REGISTRY found in configuration"; exit 1; }
-    [ -z "${IMAGE_NAMESPACE}" ] && { error "no IMAGE_NAMESPACE found in configuration"; exit 1; }
     [ -z "${IMAGE_REPOSITORY}" ] && { error "no IMAGE_REPOSITORY found in configuration"; exit 1; }
     [ -z "${IMAGE_TAG}" ] && { error "no IMAGE_TAG found in configuration"; exit 1; }
 
+}
+
+function fully-qualified-image-name() {
+
+    local name="${IMAGE_REGISTRY}/"
+    [ -n "${IMAGE_NAMESPACE}" ] && name="${image}${IMAGE_NAMESPACE}/"
+    name="${name}${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+
+    echo ${name}
 }
 
 function build-java() {
@@ -190,7 +210,7 @@ function build-image() {
 
     ${no_cache} && no_cache_arg="--no-cache"
 
-    if ! docker build ${no_cache_arg} -t ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_REPOSITORY}:${IMAGE_TAG} .; then
+    if ! docker build ${no_cache_arg} -t $(fully-qualified-image-name) .; then
         echo "docker build failed" 1>&2;
         return 1;
     fi
@@ -198,7 +218,11 @@ function build-image() {
 
 function push-image() {
 
-    if ! docker push ${IMAGE_REGISTRY}/${IMAGE_NAMESPACE}/${IMAGE_REPOSITORY}:${IMAGE_TAG}; then
+    local image_name=$(fully-qualified-image-name)
+
+    echo "pushing ${image_name} ..."
+
+    if ! docker push ${image_name}; then
         echo "docker push failed" 1>&2;
         return 1;
     fi

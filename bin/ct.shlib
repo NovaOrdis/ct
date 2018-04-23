@@ -17,6 +17,8 @@ Commands:
 
     attach - exec a bash into the newest container.
 
+        -u <uid> Use the specified UID when attaching.
+
 EOF
 }
 
@@ -37,7 +39,9 @@ function main() {
 
         elif [[ -z ${command} ]]; then
 
-            command=$1
+            command=$1;
+            shift;
+            break;
         fi
 
         shift
@@ -45,7 +49,7 @@ function main() {
 
     [[ -z ${command} ]] && { display-usage; exit 1; }
 
-    ${command}
+    ${command} "$@"
 }
 
 function debug() {
@@ -61,6 +65,18 @@ function error() {
 
 function attach() {
 
+    local uid
+
+    while [ -n "$1" ]; do
+
+        if [ "$1" = "-u" ]; then
+            shift
+            uid=$1
+        fi
+
+        shift;
+    done
+
     local tcid
 
     for cid in $(docker ps -q); do
@@ -70,7 +86,15 @@ function attach() {
         tcid=${cid}
     done
 
-    echo "attaching to the newest container (${tcid}) ..."
+    local uid_arg
 
-    docker exec -it ${tcid} bash
+    if [ -n "${uid}" ]; then
+
+        uid_arg="-u ${uid}"
+        uid_message="as UID ${uid} "
+    fi
+
+    echo "attaching to the newest container (${tcid}) ${uid_message}..."
+
+    docker exec -it ${uid_arg} ${tcid} bash
 }

@@ -62,7 +62,7 @@ EOF
 
 function main() {
 
-    local command=build
+    local command
     local build_java=true
     local build_image=true
     local push_image=true
@@ -72,8 +72,7 @@ function main() {
 
         if [ "--help" == "$1" -o "help" = "$1" ]; then
 
-            display-usage;
-            exit 0;
+            command="help"
 
         elif [ "-v" == "$1" ]; then
 
@@ -91,6 +90,10 @@ function main() {
 
             no_cache=true
 
+        elif [ "build" == "$1" ]; then
+
+            command="build"
+
         elif [ "clean" == "$1" ]; then
 
             command="clean"
@@ -106,6 +109,14 @@ function main() {
 
         shift
     done
+
+    [ -z "${command}" ] && command="help"
+
+    if [ "${command}" = "help" ]; then
+
+        display-usage;
+        exit 0;
+    fi
 
     read-configuration;
 

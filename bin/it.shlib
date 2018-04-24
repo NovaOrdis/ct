@@ -318,7 +318,7 @@ function clean-dangling-images() {
         echo "no dangling images in the local registry"
 
     else
-    
+
         docker rmi
     fi
 

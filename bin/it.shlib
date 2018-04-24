@@ -118,7 +118,7 @@ function main() {
         exit 0;
     fi
 
-    read-configuration;
+    read-configuration ${command};
 
     if [ "${command}" = "build" ]; then
 

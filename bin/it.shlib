@@ -46,7 +46,8 @@ it expects a .it/it.conf configuration file with a similar content:
 
 where:
 
-  IMAGE_REGISTRY - the registry to push new newly created images to.
+  IMAGE_REGISTRY - the registry to push new newly created images to. If not configured,
+    the local registry image will not be pushed anywhere.
 
   IMAGE_NAMESPACE - the namespace in the target registry to push the newly created images to.
     The value is optional, if not provided, no namespace will be used.
@@ -132,7 +133,7 @@ function main() {
             build-image ${no_cache} || { echo "failed to build image" 1>&2; exit 1; }
         fi
 
-        if ${push_image}; then
+        if [ ${push_image} -a -n "${IMAGE_REGISTRY}" ]; then
 
             push-image || { echo "failed to push image" 1>&2; exit 1; }
         fi
@@ -189,17 +190,21 @@ function read-configuration() {
     # make sure the mandatory configuration is present
     #
 
-    [ -z "${IMAGE_REGISTRY}" ] && { error "no IMAGE_REGISTRY found in configuration"; exit 1; }
-    [ -z "${IMAGE_REPOSITORY}" ] && { error "no IMAGE_REPOSITORY found in configuration"; exit 1; }
-    [ -z "${IMAGE_TAG}" ] && { error "no IMAGE_TAG found in configuration"; exit 1; }
+    #
+    # IMAGE_REGISTRY can be omitted, which means no image will be pushed externally
+    # IMAGE_TAG can be omitted, which means the implicit tag will be "latest"
+    #
 
+    [ -z "${IMAGE_REPOSITORY}" ] && { error "no IMAGE_REPOSITORY found in configuration"; exit 1; }
 }
 
 function fully-qualified-image-name() {
 
-    local name="${IMAGE_REGISTRY}/"
+    local name
+    [ -n "${name}" ] && name = "${IMAGE_REGISTRY}/"
     [ -n "${IMAGE_NAMESPACE}" ] && name="${image}${IMAGE_NAMESPACE}/"
-    name="${name}${IMAGE_REPOSITORY}:${IMAGE_TAG}"
+    name="${name}${IMAGE_REPOSITORY}"
+    [ -n "${IMAGE_TAG}" ] && name=":${IMAGE_TAG}"
 
     echo ${name}
 }
@@ -227,11 +232,22 @@ function build-image() {
 
     local no_cache_arg
 
-    ${no_cache} && no_cache_arg="--no-cache"
+    ${no_cache} && no_cache_arg="--no-cache "
 
-    if ! docker build ${no_cache_arg} -t $(fully-qualified-image-name) .; then
+    local command="docker build ${no_cache_arg}-t $(fully-qualified-image-name) ."
+
+
+    if ! ${command}; then
+
         echo "docker build failed" 1>&2;
         return 1;
+
+    else
+
+        echo ""
+        echo "build command used: ${command}"
+        echo ""
+
     fi
 }
 

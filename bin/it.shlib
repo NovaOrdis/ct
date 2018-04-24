@@ -171,6 +171,14 @@ function error() {
 
 function read-configuration() {
 
+    local command=$1
+
+    #
+    # some commands do not need configuration
+    #
+
+    [[ ${command} = "dangling" ]] && return 0
+
     local config_file=.it/it.conf
 
     [ -f ${config_file} ] || { error "no it configuration file ${config_file} found"; exit 1; }

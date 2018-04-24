@@ -311,6 +311,15 @@ function archive() {
 
 function clean-dangling-images() {
 
-    docker rmi $(docker images --filter "dangling=true" -q --no-trunc)
+    local dangling=$(docker images --filter "dangling=true" -q --no-trunc)
+
+    if [ -z ${dangling} ]; then
+
+        echo "no dangling images in the local registry"
+
+    else
+    
+        docker rmi
+    fi
 
 }

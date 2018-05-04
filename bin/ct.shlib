@@ -22,6 +22,8 @@ Commands:
 
         -u <uid> Use the specified UID when attaching.
 
+    rm - deletes all containers that have exited.
+
 EOF
 }
 
@@ -118,3 +120,23 @@ function attach() {
 
     docker exec -it ${uid_arg} ${cid_or_name} bash
 }
+
+function rm() {
+
+    local cids
+
+    cids=$(docker ps -q --filter "status=exited") || exit 1
+
+    if [ -z "${cids}" ]; then
+
+        echo "there are no containers to remove"
+    else
+
+        echo "removing all containers that have exited ..."
+        docker rm ${cids}
+    fi
+
+
+
+}
+
